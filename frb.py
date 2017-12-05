@@ -65,6 +65,7 @@ image_reference()
 import glob
 import pdb
 import skimage
+# import imageio
 class FRBDataset(utils.Dataset):
     """Generates the frb dataset.
     """
@@ -86,9 +87,9 @@ class FRBDataset(utils.Dataset):
         # Add images
         image_id = 0
         if self.mode == "train":
-            paths = glob.glob(self.data_path + '*.npz')[:count]
+            paths = glob.glob(self.data_path + '*.npy')[:count]
         else:
-            paths = glob.glob(self.data_path + '*.npz')[-count:]
+            paths = glob.glob(self.data_path + '*.npy')[-count:]
         for img_path in paths:
             self.image_ids.append(image_id)
             self.add_image("frbs", image_id=image_id, path=img_path)
@@ -103,11 +104,29 @@ class FRBDataset(utils.Dataset):
         specs in image_info.
         """
         info = self.image_info[image_id]
-        image = np.load(info['path'])['frame']
-        image = np.concatenate([np.zeros((42, 256)), image])
+        image = np.load(info['path'])
+        # print(image.shape)
+        image = image[:, :, 0]
+
+        # print((np.min(image), np.max(image)))
+        # image = (image - np.min(image)) / (np.max(image) - np.min(image))
+        # image = image * 2 - 1
+        # print((np.min(image), np.max(image)))
+        # skimage.io.imsave('raw.png', image)
+        # imageio.imwrite('rawIO.png', image)
+        # print(image.shape)
+
+        # image = np.swapaxes(image, 0, 1)[:, :, 0] # makes shape 342 * 256
+        # print(image.shape)
+        # image = image.reshape((342, 256, 1))
+        image = np.concatenate([np.zeros((256, 42)), image], axis=1)
         if image.ndim != 3:
             image = skimage.color.gray2rgb(image)
-        #print(image.shape)
+            # print((np.min(image), np.max(image)))
+            # print(image.shape)
+        # print(image.shape)
+        # skimage.io.imsave('gray2rgb.png', image)
+        # imageio.imwrite('gray2rgbIO.png', image)
         return image
 
     # Could use this function to return additional image info if needed

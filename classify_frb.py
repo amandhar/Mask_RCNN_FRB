@@ -18,11 +18,13 @@ from model import log
 #%matplotlib inline 
 
 import tensorflow as tf
-from keras.backend.tensorflow_backend import set_session
-config = tf.ConfigProto()
-config.gpu_options.per_process_gpu_memory_fraction = 0.3
-config.gpu_options.allow_growth = True
-set_session(tf.Session(config=config))
+
+data_path = "two_frbs/"
+# from keras.backend.tensorflow_backend import set_session
+# config = tf.ConfigProto()
+# config.gpu_options.per_process_gpu_memory_fraction = 0.3
+# config.gpu_options.allow_growth = True
+# set_session(tf.Session(config=config))
 
 
 
@@ -34,16 +36,18 @@ ROOT_DIR = os.getcwd()
 # Directory to save logs and trained model
 MODEL_DIR = os.path.join(ROOT_DIR, "logs")
 
-from FRBDataset import FRBDataset
-from FRBConfig import FRBConfig
+from frb import FRBConfig, FRBDataset
 config = FRBConfig()
+# print(config.BATCH_SIZE)
+# print(config.STEPS_PER_EPOCH)
+# print(config.NAME)
 
-dataset_train = FRBDataset(mode="train")
-dataset_train.load_frbs(10, config.IMAGE_MAX_DIM, config.IMAGE_MIN_DIM)
-dataset_train.prepare()
+# dataset_train = FRBDataset(mode="train", data_path=data_path)
+# dataset_train.load_frbs(10, config.IMAGE_MAX_DIM, config.IMAGE_MIN_DIM)
+# dataset_train.prepare()
 
-dataset_val = FRBDataset(mode="val")
-dataset_val.load_frbs(10, config.IMAGE_MAX_DIM, config.IMAGE_MIN_DIM) # make sure these aren't in training set
+dataset_val = FRBDataset(mode="train", data_path=data_path)
+dataset_val.load_frbs(2, config.IMAGE_MIN_DIM, config.IMAGE_MAX_DIM) # make sure these aren't in training set
 dataset_val.prepare()
 
 '''
@@ -71,29 +75,41 @@ print("Loading weights from ", model_path)
 model.load_weights(model_path, by_name=True)
 
 
-for i in range(5):
-
-    # Test on a random image
-    image_id = random.choice(dataset_val.image_ids)
-    original_image, image_meta, gt_bbox, gt_mask =\
-        modellib.load_image_gt(dataset_val, config, 
-                               image_id, use_mini_mask=False)
+# Ground Truth Image with Mask
+    # original_image, image_meta, gt_bbox, gt_mask =\
+    #     modellib.load_image_gt(dataset_val, config, 
+    #                            image_id, use_mini_mask=False)
         
-    log("original_image", original_image)
-    log("image_meta", image_meta)
-    log("gt_bbox", gt_bbox)
-    log("gt_mask", gt_mask)
+    # log("original_image", original_image)
+    # log("image_meta", image_meta)
+    # log("gt_bbox", gt_bbox)
+    # log("gt_mask", gt_mask)
 
-    visualize.display_instances(original_image, gt_bbox[:,:4], gt_mask, gt_bbox[:,4], 
-                                dataset_train.class_names, figsize=(8, 8))
-    plt.savefig("frb_training_images/gt_" + str(i))
+    # visualize.display_instances(original_image, gt_bbox[:,:4], gt_mask, gt_bbox[:,4], 
+    #                             dataset_train.class_names, figsize=(8, 8))
+    # plt.savefig("frb_training_images/gt_" + str(i))
 
-    results = model.detect([original_image], verbose=1)
+images = []
+for image_id in dataset_val.image_ids:
+    images.append(dataset_val.load_image(image_id))
 
-    r = results[0]
-    visualize.display_instances(original_image, r['rois'], r['masks'], r['class_ids'], 
-                                dataset_val.class_names, r['scores'], ax=get_ax())
-    plt.savefig("frb_training_images/test_" + str(i))
-
+i = 0
+batch_size = 2
+while i < len(dataset_val.image_ids):
+    # batch = images[i : (i+batch_size)]
+    batch_ids = dataset_val.image_ids[i : (i+batch_size)]
+    batch = [dataset_val.load_image(image_id) for image_id in batch_ids]
+    results = model.detect(batch, verbose=1)
+    for j in range(len(results)):
+        r = results[j]
+        visualize.display_instances(batch[j], r['rois'], r['masks'], r['class_ids'], 
+                                    dataset_val.class_names, r['scores'])
+        # Save r['masks'][0]
+        # Save r['scores'][0]
+        image_name = dataset_val.image_reference(batch_ids[j])['path'].split('/')[-1]
+        print(image_name)
+        plt.savefig("result_images/" + image_name[:-3] + "png")
+        plt.close()
+    i += batch_size
 
 

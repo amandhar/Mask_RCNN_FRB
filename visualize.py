@@ -17,7 +17,7 @@ import matplotlib.patches as patches
 import matplotlib.lines as lines
 from matplotlib.patches import Polygon
 import IPython.display
-
+from scipy.ndimage.morphology import binary_dilation
 import utils
 
 
@@ -43,7 +43,7 @@ def display_images(images, titles=None, cols=4, cmap=None, norm=None,
         plt.subplot(rows, cols, i)
         plt.title(title, fontsize=9)
         plt.axis('off')
-        plt.imshow(image.astype(np.uint8), cmap=cmap,
+        plt.imshow(image, cmap=cmap,
                    norm=norm, interpolation=interpolation)
         i += 1
     plt.show()
@@ -62,7 +62,7 @@ def random_colors(N, bright=True):
     return colors
 
 
-def apply_mask(image, mask, color, alpha=0.5):
+def apply_mask(image, mask, color, alpha=0.0):
     """Apply the given mask to the image.
     """
     for c in range(3):
@@ -92,7 +92,7 @@ def display_instances(image, boxes, masks, class_ids, class_names,
         assert boxes.shape[0] == masks.shape[-1] == class_ids.shape[0]
 
     if not ax:
-        _, ax = plt.subplots(1, figsize=figsize)
+        fig, ax = plt.subplots(1, figsize=figsize)
 
     # Generate random colors
     colors = random_colors(N)
@@ -104,15 +104,21 @@ def display_instances(image, boxes, masks, class_ids, class_names,
     ax.axis('off')
     ax.set_title(title)
 
-    masked_image = image.astype(np.uint32).copy()
+    masked_image = image.astype(np.float32).copy()[:, 42:, :]
+    # masked_image = masked_image.astype(np.float32)
+    masked_image = np.clip((masked_image + 5) / 10, 0, 1) * 255
+    #import IPython; IPython.embed()
     for i in range(N):
-        color = colors[i]
+        #color = colors[i]
+        color = (0.0, 1.0, 0.0)
+        #import IPython; IPython.embed()
 
         # Bounding box
         if not np.any(boxes[i]):
             # Skip this instance. Has no bbox. Likely lost in image cropping.
             continue
         y1, x1, y2, x2 = boxes[i]
+        x1, x2 = x1 - 42, x2 - 42
         p = patches.Rectangle((x1, y1), x2 - x1, y2 - y1, linewidth=2,
                               alpha=0.7, linestyle="dashed",
                               edgecolor=color, facecolor='none')
@@ -128,8 +134,9 @@ def display_instances(image, boxes, masks, class_ids, class_names,
                 color='w', size=11, backgroundcolor="none")
 
         # Mask
-        mask = masks[:, :, i]
-        masked_image = apply_mask(masked_image, mask, color)
+        mask = masks[:, 42:, i]
+        mask = binary_dilation(mask, iterations=5)
+        #masked_image = apply_mask(masked_image, mask, color)
 
         # Mask Polygon
         # Pad to ensure proper polygons for masks that touch image edges.
@@ -142,7 +149,10 @@ def display_instances(image, boxes, masks, class_ids, class_names,
             verts = np.fliplr(verts) - 1
             p = Polygon(verts, facecolor="none", edgecolor=color)
             ax.add_patch(p)
-    ax.imshow(masked_image.astype(np.uint8))
+    # ax.imshow(masked_image.astype(np.uint8))
+
+    cf = ax.imshow(masked_image[..., 0], cmap="hot")
+    fig.colorbar(cf, ax=ax)
 
 
 def draw_rois(image, rois, refined_rois, mask, class_ids, class_names, limit=10):
