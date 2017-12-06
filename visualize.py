@@ -19,6 +19,7 @@ from matplotlib.patches import Polygon
 import IPython.display
 from scipy.ndimage.morphology import binary_dilation
 import utils
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 
 ############################################################
@@ -95,30 +96,35 @@ def display_instances(image, boxes, masks, class_ids, class_names,
         fig, ax = plt.subplots(1, figsize=figsize)
 
     # Generate random colors
-    colors = random_colors(N)
+    # colors = random_colors(N)
 
     # Show area outside image boundaries.
     height, width = image.shape[:2]
-    ax.set_ylim(height + 10, -10)
-    ax.set_xlim(-10, width + 10)
-    ax.axis('off')
+    ax.set_xlim(height, 0)
+    ax.set_ylim(0, width)
+
+    ax.set_xlabel("Time (ms)", fontsize=24)
+    ax.set_xticks(np.arange(0, 256, 256/5.01)) # Divide by xxx.01 so all ticks show up
+    ax.set_xticklabels(['90', '72', '54', '36', '18', '0'], fontsize=22)
+
+    ax.set_ylabel("Frequency (GHz)", fontsize=24)
+    ax.set_yticks(np.arange(0, 342, 342/4.01)) # Divide by xxx.01 so all ticks show up
+    ax.set_yticklabels(['4', '5', '6', '7', '8'], fontsize=22)
+    
     ax.set_title(title)
 
-    masked_image = image.astype(np.float32).copy()[:, 42:, :]
-    # masked_image = masked_image.astype(np.float32)
-    masked_image = np.clip((masked_image + 5) / 10, 0, 1) * 255
-    #import IPython; IPython.embed()
+    masked_image = image.astype(np.float32).copy()
+    masked_image = np.clip((masked_image + 5) / 10, 0, 1) * 255 # Convert from std normal to 0-255 range
     for i in range(N):
         #color = colors[i]
-        color = (0.0, 1.0, 0.0)
-        #import IPython; IPython.embed()
+        color = (0.0, 1.0, 0.0) # Green bounding boxes, outlines, etc.
 
         # Bounding box
         if not np.any(boxes[i]):
             # Skip this instance. Has no bbox. Likely lost in image cropping.
             continue
         y1, x1, y2, x2 = boxes[i]
-        x1, x2 = x1 - 42, x2 - 42
+        x1, x2, y1, y2 = y1, y2, x1, x2 # For transposed image
         p = patches.Rectangle((x1, y1), x2 - x1, y2 - y1, linewidth=2,
                               alpha=0.7, linestyle="dashed",
                               edgecolor=color, facecolor='none')
@@ -128,15 +134,16 @@ def display_instances(image, boxes, masks, class_ids, class_names,
         class_id = class_ids[i]
         score = scores[i] if scores is not None else None
         label = class_names[class_id]
-        x = random.randint(x1, (x1 + x2) // 2)
+        # x = random.randint(x1, (x1 + x2) // 2)
+        x = random.randint((x1 + x2) // 2, x2) # For transposed image
         caption = "{} {:.3f}".format(label, score) if score else label
-        ax.text(x1, y1 + 8, caption,
-                color='w', size=11, backgroundcolor="none")
-
+        # ax.text(x1, y1 + 8, caption,
+        #         color='w', size=16, backgroundcolor="none", weight="bold")
+        ax.text(x2, y2, caption,
+                color='w', size=16, backgroundcolor="none", weight="bold") # For transposed image
         # Mask
-        mask = masks[:, 42:, i]
+        mask = masks[:, :, i]
         mask = binary_dilation(mask, iterations=5)
-        #masked_image = apply_mask(masked_image, mask, color)
 
         # Mask Polygon
         # Pad to ensure proper polygons for masks that touch image edges.
@@ -146,13 +153,15 @@ def display_instances(image, boxes, masks, class_ids, class_names,
         contours = find_contours(padded_mask, 0.5)
         for verts in contours:
             # Subtract the padding and flip (y, x) to (x, y)
-            verts = np.fliplr(verts) - 1
+            # verts = np.fliplr(verts) - 1 
+            verts -= 1 # For transposed image
             p = Polygon(verts, facecolor="none", edgecolor=color)
             ax.add_patch(p)
-    # ax.imshow(masked_image.astype(np.uint8))
 
-    cf = ax.imshow(masked_image[..., 0], cmap="hot")
-    fig.colorbar(cf, ax=ax)
+    cf = ax.imshow(masked_image[..., 0].T, cmap="hot") # Transposing so time is on x axis
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="5%", pad=0.1) # Colorbar placement
+    fig.colorbar(cf, cax=cax)
 
 
 def draw_rois(image, rois, refined_rois, mask, class_ids, class_names, limit=10):

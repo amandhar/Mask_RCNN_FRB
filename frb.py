@@ -21,7 +21,7 @@ class FRBConfig(Config):
     # Use small images for faster training. Set the limits of the small side
     # the large side, and that determines the image shape.
     IMAGE_MIN_DIM = 256
-    IMAGE_MAX_DIM = 342+42 # 42 zeros for padding
+    IMAGE_MAX_DIM = 342+42 # 42 zeros for padding, need to add so img is divisible by 2^6
 
     # Use smaller anchors because our image and objects are small
     RPN_ANCHOR_SCALES = (8, 16, 32, 64, 128)  # anchor side in pixels
@@ -87,9 +87,9 @@ class FRBDataset(utils.Dataset):
         # Add images
         image_id = 0
         if self.mode == "train":
-            paths = glob.glob(self.data_path + '*.npy')[:count]
+            paths = glob.glob(self.data_path + '*.npy')[:count] # start at beginning, count forward
         else:
-            paths = glob.glob(self.data_path + '*.npy')[-count:]
+            paths = glob.glob(self.data_path + '*.npy')[:-count - 1:-1] # start at end, count backward
         for img_path in paths:
             self.image_ids.append(image_id)
             self.add_image("frbs", image_id=image_id, path=img_path)
@@ -105,29 +105,12 @@ class FRBDataset(utils.Dataset):
         """
         info = self.image_info[image_id]
         image = np.load(info['path'])
-        # print(image.shape)
-        image = image[:, :, 0]
-
-        # print((np.min(image), np.max(image)))
-        # image = (image - np.min(image)) / (np.max(image) - np.min(image))
-        # image = image * 2 - 1
-        # print((np.min(image), np.max(image)))
-        # skimage.io.imsave('raw.png', image)
-        # imageio.imwrite('rawIO.png', image)
-        # print(image.shape)
-
-        # image = np.swapaxes(image, 0, 1)[:, :, 0] # makes shape 342 * 256
-        # print(image.shape)
-        # image = image.reshape((342, 256, 1))
+        image = image[:, :, 0] # To make image 2D for padding
         image = np.concatenate([np.zeros((256, 42)), image], axis=1)
         if image.ndim != 3:
             image = skimage.color.gray2rgb(image)
-            # print((np.min(image), np.max(image)))
-            # print(image.shape)
-        # print(image.shape)
-        # skimage.io.imsave('gray2rgb.png', image)
-        # imageio.imwrite('gray2rgbIO.png', image)
         return image
+
 
     # Could use this function to return additional image info if needed
     def image_reference(self, image_id):
@@ -140,7 +123,7 @@ class FRBDataset(utils.Dataset):
         """Generate instance masks for frbs of the given image ID."""
         info = self.image_info[image_id]
         mask = np.load(info['path'])['mask']
-        mask = np.concatenate([np.zeros((42, 256)).astype(bool), mask])
+        mask = np.concatenate([np.zeros((256, 42)).astype(bool), mask])
         return mask[:,:,np.newaxis], np.array([1])
 
 
